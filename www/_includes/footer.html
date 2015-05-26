@@ -1,0 +1,24 @@
+<footer>
+    <!-- jQuery (necessary for Bootstrap's JavaScript plugins) -->
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.11.2/jquery.min.js"></script>
+
+	<!-- Latest compiled and minified JavaScript -->
+	<script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.4/js/bootstrap.min.js"></script>
+
+	<!-- Highlight active tab in navbar -->
+	<script>
+		var url = window.location;
+		$('ul.nav a').filter(function() {
+			return this.href == url;
+		}).parent().addClass('active');
+	</script>
+
+	<!-- page-specific scripts, if any -->
+	{% if page.scripts %}
+		{% for script in page.scripts %}
+			<script src="{{ site.baseurl }}/{{ script }}"></script>
+		{% endfor %}
+	{% endif %}
+
+
+</footer>
