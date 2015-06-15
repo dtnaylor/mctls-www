@@ -239,44 +239,44 @@ for specifying the encryption context in use, handling of the MAC, and
 specifying the middleboxes to use in a handshake. The following methods have been
 added to the API:
 
-	int        mcTLS_connect(SSL *ssl, mcTLS_SLICE* slices, int slices_len, mcTLS_PROXY *middleboxes, int middleboxes_len);
-	int 	mcTLS_middlebox(SSL *ssl, SSL* ( *connect_func)(SSL *ssl, char *address), SSL **ssl_next);
-	int 	mcTLS_get_slices(SSL *ssl, mcTLS_SLICE **slices, int *slices_len);
-	int 	mcTLS_get_middleboxes(SSL *ssl, mcTLS_PROXY **middleboxes, int *middleboxes_len);
+	int          mcTLS_connect(SSL *ssl, mcTLS_SLICE* slices, int slices_len, mcTLS_PROXY *middleboxes, int middleboxes_len);
+	int          mcTLS_middlebox(SSL *ssl, SSL* ( *connect_func)(SSL *ssl, char *address), SSL **ssl_next);
+	int          mcTLS_get_slices(SSL *ssl, mcTLS_SLICE **slices, int *slices_len);
+	int          mcTLS_get_middleboxes(SSL *ssl, mcTLS_PROXY **middleboxes, int *middleboxes_len);
 	mcTLS_PROXY* mcTLS_generate_middlebox(SSL *s, char* address);
 	mcTLS_PROXY* mcTLS_middlebox_from_id(SSL *ssl, int middlebox_id); **TO BE REMOVED**
 	mcTLS_SLICE* mcTLS_generate_slice(SSL *s, char* purpose);
 	mcTLS_SLICE* mcTLS_slice_from_id(SSL *ssl, int slice_id);  **TO BE REMOVED**
-	int 	mcTLS_assign_middlebox_write_slices(SSL *s, mcTLS_PROXY* middlebox, mcTLS_SLICE* slices[ ], int slices_len);
-	int 	mcTLS_assign_middlebox_read_slices(SSL *s, mcTLS_PROXY* middlebox, mcTLS_SLICE* slices[ ], int slices_len);
-	int        mcTLS_read_record(SSL *ssl, void *buf, int num, mcTLS_SLICE **slice, mcTLS_CTX **mac);
-	int        mcTLS_write_record(SSL *ssl, const void *buf, int num, mcTLS_SLICE *slice);
-	int        mcTLS_forward_record(SSL *ssl, const void *buf, int num, mcTLS_SLICE *slice, mcTLS_CTX *mac, int modified);
+	int 	     mcTLS_assign_middlebox_write_slices(SSL *s, mcTLS_PROXY* middlebox, mcTLS_SLICE* slices[ ], int slices_len);
+	int 	     mcTLS_assign_middlebox_read_slices(SSL *s, mcTLS_PROXY* middlebox, mcTLS_SLICE* slices[ ], int slices_len);
+	int          mcTLS_read_record(SSL *ssl, void *buf, int num, mcTLS_SLICE **slice, mcTLS_CTX **mac);
+	int          mcTLS_write_record(SSL *ssl, const void *buf, int num, mcTLS_SLICE *slice);
+	int          mcTLS_forward_record(SSL *ssl, const void *buf, int num, mcTLS_SLICE *slice, mcTLS_CTX *mac, int modified);
 
-mcTLS_connect(...) expands on the standard TLS connect method to allow clients to
+``mcTLS_connect(...)`` expands on the standard TLS connect method to allow clients to
 specify the middlebox list to be included in the extension of the handshake.
 
-mcTLS_generate_middlebox(...) is used by the client to generate the state for a
+``mcTLS_generate_middlebox(...)`` is used by the client to generate the state for a
 middlebox. This should be called once for each middlebox in the session and the
-resulting state objects passed to mcTLS_connect(...).
+resulting state objects passed to ``mcTLS_connect(...)``.
 
-mcTLS_generate_slice(...) is used by the client to initialize the state for each
+``mcTLS_generate_slice(...)`` is used by the client to initialize the state for each
 slice to be used in a session. It should be called once be slice and the
-resulting state objects passed as an array to mcTLS_connect(...).
+resulting state objects passed as an array to ``mcTLS_connect(...)``.
 
-mcTLS_assign_middlebox_write_slices(...) and mcTLS_assign_middlebox_write_slices(...) are
+``mcTLS_assign_middlebox_write_slices(...)`` and ``mcTLS_assign_middlebox_write_slices(...)`` are
 used to specify the slices that a middlebox has read and write access to. Setting
 these will control the distribution of encryption contexts during the
 handshake. Write access for a middlebox implies read access.
 
-mcTLS_middlebox(...) is the equivalent call of mcTLS_connect(...) for a middlebox
+``mcTLS_middlebox(...)`` is the equivalent call of ``mcTLS_connect(...)`` for a middlebox
 implementation. Upon receiving a connection from a client, the middlebox will
-instantiate an instance of the SSL library and call mcTLS_middlebox(...) passing a
+instantiate an instance of the SSL library and call ``mcTLS_middlebox(...)`` passing a
 callback function. The callback function will be called during the handshake to
 enable the application to make a connection to the next middlebox or the server and
 create another SSL library instance for the second connection.
 
-mcTLS_read_record(...) is used by clients, servers, and middleboxes to read the next
+``mcTLS_read_record(...)`` is used by clients, servers, and middleboxes to read the next
 available record from the communication medium. If there is no record
 available, the return value is 0. slice returns the encryption context used to
 decrypt the message or an empty encryption context if the specified encryption
@@ -284,11 +284,11 @@ context is not available to the middlebox. If an encryption context is not
 available at either the client or the server, it should be treated as a fatal
 error.
 
-mcTLS_write_record(...) is used by clients and servers. The message is encrypted
+``mcTLS_write_record(...)`` is used by clients and servers. The message is encrypted
 using the specified encryption context and written to the communication medium.
 If the encryption context is not available, an error is returned.
 
-mcTLS_forward_record(...) is used by mcTLS middleboxes to send a record on after
+``mcTLS_forward_record(...)`` is used by mcTLS middleboxes to send a record on after
 processing. If the encryption context is not available, then the application
 data passed is treated as an encrypted record and forwarded without further
 processing. If modified is false, the specified MAC is used and the message is
@@ -297,9 +297,9 @@ new MAC will be generated before encryption. Because the MAC generation
 includes a sequence number, the middlebox must insure that the number of sent and
 received records remains consistent and ordered upon each side of the middlebox.
 
-mcTLS_SLICE is a new structure that includes the full encryption context of a
+``mcTLS_SLICE`` is a new structure that includes the full encryption context of a
 traditional TLS session. The mcTLS client, server, and middlebox must maintain one
-structure for each encryption context negotiated for the session. The mcTLS_SLICE
+structure for each encryption context negotiated for the session. The ``mcTLS_SLICE``
 structure includes a slice_id 1 byte value used to identify the slice within
 the mcTLS record format and a have_material boolean value that indicates whether
 this client, server, or middlebox has the encryption context. Clients and servers
@@ -313,16 +313,16 @@ relevant to the application.
         char *purpose;
 	}
 
-Read_access and write_access are boolean values indicating whether the middlebox
-has read or write access to the slice, respectively. Clients and servers always
-have both read and write access to all slices. Purpose is a null terminated
-string that is defined by the client before the handshake to assign an
-application dependent meaning to the slice. It can be used to indicate what
+``read_access`` and ``write_access`` are boolean values indicating whether the
+middlebox has read or write access to the slice, respectively. Clients and
+servers always have both read and write access to all slices. Purpose is a null
+terminated string that is defined by the client before the handshake to assign
+an application dependent meaning to the slice. It can be used to indicate what
 type of application data should be pass with each slice.
 
-mcTLS_CTX is context information from a previous call to mcTLS_read_record(...).
+``mcTLS_CTX`` is context information from a previous call to ``mcTLS_read_record(...)``.
 Middlebox implementations should pass the context to the related
-mcTLS_forward_record(...) call. Client and server implementations may ignore this
+``mcTLS_forward_record(...)`` call. Client and server implementations may ignore this
 value.
 
 
