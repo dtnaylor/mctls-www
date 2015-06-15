@@ -21,16 +21,16 @@ body {
 
 /* Move headings down so when you jump, header isn't hidden under navbar */
 h1 {
-	padding-top: 50px; margin-top: -50px;
+	padding-top: 70px; margin-top: -60px;
 }
 h2 {
-	padding-top: 50px; margin-top: -50px;
+	padding-top: 70px; margin-top: -60px;
 }
 h3 {
-	padding-top: 50px; margin-top: -50px;
+	padding-top: 70px; margin-top: -60px;
 }
 h4 {
-	padding-top: 50px; margin-top: -50px;
+	padding-top: 70px; margin-top: -60px;
 }
 
 /*
