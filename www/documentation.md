@@ -18,6 +18,22 @@ here, the reader should assume that no changes are made from the TLSv1.2 specifi
 * TOC
 {:toc}
 
+
+## Definitions and Notation
+
+* 	mcTLS uses a pseudorandom function, [constructed as in TLS
+	1.2](https://tools.ietf.org/html/rfc5246#section-5), to expand secrets into
+	blocks of key material:
+
+		PRF(secret, label, seed)
+
+*	In this document, `+` indicates concatenation.
+
+*	This document introduces the idea of an encryption context. We use the
+	terms "context" and "slice" interchangeably.
+
+
+
 ## Handshake Protocol
 
 The client generates a list of middleboxes to be used through a middlebox discovery
@@ -71,37 +87,37 @@ message using the negotiated keyE2E. If the client or server fail to validate
 the Finished message, then the client and server must not have observed the
 same sequence of handshake messages. This is a fatal error.
 
-	         CLIENT                       MIDDLEBOX 1                 MIDDLEBOX 2                       SERVER
+	         CLIENT               MIDDLEBOX 1         MIDDLEBOX 2               SERVER
 
-	      ClientHello -------------------------x---------------------------x------------------------------>
+	      ClientHello -----------------x-------------------x---------------------->
 
-	                                                                                                 ServerHello
-	                                                                                                 Certificate
-	                                                                                              ServerKeyExchange
-	           <-------------------------------x---------------------------x---------------------- ServerHelloDone
+	                                                                         ServerHello
+	                                                                         Certificate
+	                                                                      ServerKeyExchange
+	           <-----------------------x-------------------x-------------- ServerHelloDone
 
-	                                                                  Certificate
-	                                                               ServerKeyExchange
-	           < - - - - - - - - - - - - - - - o - - - - - - - - -  ServerHelloDone - - - - - - - - - - - >
+	                                                  Certificate
+	                                               ServerKeyExchange
+	           < - - - - - - - - - - - o - - - - -  ServerHelloDone - - - - - - - >
 
-	                                      Certificate
-	                                   ServerKeyExchange
-	           < - - - - - - - - - - -  ServerHelloDone  - - - - - - - - - o - - - - - - - - - - - - - - ->
+	                              Certificate
+	                           ServerKeyExchange
+	           < - - - - - - -  ServerHelloDone  - - - - - o - - - - - - - - - - ->
 
-	   ClientKeyExchange ----------------------x---------------------------x------------------------------>
-	MiddleboxKeyMaterial[M1] ------------------x---------------------------o------------------------------>
-	MiddleboxKeyMaterial[M2] ------------------o---------------------------x------------------------------>
-	MiddleboxKeyMaterial[S] -------------------o---------------------------o------------------------------>
+	   ClientKeyExchange --------------x-------------------x---------------------->
+	MiddleboxKeyMaterial[M1] ----------x-------------------o---------------------->
+	MiddleboxKeyMaterial[M2] ----------o-------------------x---------------------->
+	MiddleboxKeyMaterial[S] -----------o-------------------o---------------------->
 	   ChangeCipherSpec 
-	       Finished ---------------------------x---------------------------x------------------------------>
+	       Finished -------------------x-------------------x---------------------->
 
-	           <-------------------------------x---------------------------o------------------ MiddleboxKeyMaterial[M1]
-	           <-------------------------------o---------------------------x------------------ MiddleboxKeyMaterial[M2]
-	           <-------------------------------o---------------------------o------------------ MiddleboxKeyMaterial[C]
-	                                                                                               ChangeCipherSpec
-	           <-------------------------------x---------------------------x-------------------------- Finished
+	           <-----------------------x-------------------o---------- MiddleboxKeyMaterial[M1]
+	           <-----------------------o-------------------x---------- MiddleboxKeyMaterial[M2]
+	           <-----------------------o-------------------o---------- MiddleboxKeyMaterial[C]
+	                                                                       ChangeCipherSpec
+	           <-----------------------x-------------------x------------------ Finished
 
-	    Application Data <---------------------x---------------------------x---------------------> Application Data
+	    Application Data <-------------x-------------------x-------------> Application Data
 
 (In the figure, ``x`` indicates the middlebox reads and forwards the message;
 ``o`` indicates it just forwards it. The spaced dashed lines indicate the
@@ -147,18 +163,21 @@ write access. To have write access, a middlebox must also have read access. The
 middlebox_id values 0x00-0x02 are reserved, with 0x01 always identifying the client
 and 0x02 always identifying the server.
 
+
 ### Middlebox Key Material Message
 
 The delivery of key material to middleboxes necessitates the inclusion of a new
 handshake message type into the TLS Handshake Protocol. During the handshake,
-both the client and server will send a MiddleboxKeyMaterial message to each middlebox
-with tentative handshake message type 0x28. The payload of the message is
-encrypted with a public key provided by the middlebox in either the Certificate or
-ServerKeyExchange message and contains contributory material for the keys
-requested by the middlebox. Once a middlebox receives and decrypts a MiddleboxKeyMaterial
-message from both the client and the server, it may combine the key material to
-produce the keys that will actually be used in the encryption of application
-data. The format of the message is as follows:
+both the client and server will send a MiddleboxKeyMaterial message to each
+middlebox with tentative handshake message type 0x28. The payload of the
+message is encrypted with a symmetric key shared between the endpoint sending
+the message and the middlebox receiving it and contains a "partial secret" for
+each context to which the middlebox has access.  Once a middlebox receives and
+decrypts a MiddleboxKeyMaterial message from both the client and the server, it
+uses both secrets to generate the keys that will actually be used in the
+encryption of application data (see [Context Key
+Generation](#context-key-generation)).  The format of the message is as
+follows:
 
 	MiddleboxKeyMaterial {
         middlebox_id
@@ -170,8 +189,30 @@ data. The format of the message is as follows:
 	}
 
 The format of the material varies depending upon the cipher suite agreed upon
-in the ServerHello message. Key material provided by the client and the server
-are combined using XOR to generate the session keys.
+in the ServerHello message. 
+
+
+### Context Key Generation
+
+There are six symmetric keys associated with each context:
+
+*	`client_read_key`: Encrypt/decrypt data from client to server.
+*	`server_read_key`: Encrypt/decrypt data from server to client.
+*	`client_read_MAC_key`: Compute reader MAC for data from client to server.
+*	`server_read_MAC_key`: Compute reader MAC for data from server to client.
+*	`client_write_MAC_key`: Compute writer MAC for data from client to server.
+*	`server_write_MAC_key`: Compute writer MAC for data from server to client.
+
+For each context, each party uses the partial secrets (one from the client and
+one from the server) to compute two blocks of key material:
+
+	read_key_block = PRF(client_reader_secret + server_reader_secret, "reader keys", client_random + server_random)
+	write_key_block = PRF(client_writer_secret + server_writer_secret, "writer keys", client_random + server_random)
+
+The `read_key_block` is partitioned into `client_read_key`, `server_read_key`,
+`client_read_MAC_key`, and `server_read_MAC_key`; the `write_key_block` is
+partitioned into `client_write_MAC_key` and `server_write_MAC_key`.
+
 
 ## Record Protocol
 
