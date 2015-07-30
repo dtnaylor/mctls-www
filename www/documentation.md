@@ -19,6 +19,27 @@ here, the reader should assume that no changes are made from the TLSv1.2 specifi
 {:toc}
 
 
+## Goals
+
+mcTLS is designed to provide the following five properties:
+
+1. **Entity Authentication:** As in TLS, the client must be able to verify
+the identity of the server. Additionally, the endpoints must be able to
+authenticate each middlebox.
+
+2. **Payload Secrecy:** Third parties must not be able to read any
+application data.
+
+3. **Payload Integrity:** Changes to application data by third parties or by
+middleboxes with read-only access must be detectable.
+
+4. **Visibility:** Both endpoints must be aware of all middleboxes in the
+session. mcTLS does not support transparent middleboxes.
+
+5. **Least Privilege:** Each middlebox should be granted the minimum level of
+access needed to do its jobs.
+
+
 ## Definitions and Notation
 
 * 	mcTLS uses a pseudorandom function, [constructed as in TLS
@@ -128,7 +149,7 @@ server) messages.)
 
 ### Middlebox List Extension
 
-We define a new TLS handshake extension middlebox_list with tentative type id
+mcTLS defines a new TLS handshake extension middlebox_list with tentative type id
 0xff06. The extension contains a list of the middleboxes to be used in the
 communication as well as the number of encryption contexts, also known as
 slices, that need to be generated and which middleboxes should have access to which
@@ -166,25 +187,24 @@ and 0x02 always identifying the server.
 
 ### Middlebox Key Material Message
 
-The delivery of key material to middleboxes necessitates the inclusion of a new
-handshake message type into the TLS Handshake Protocol. During the handshake,
-both the client and server will send a MiddleboxKeyMaterial message to each
-middlebox with tentative handshake message type 0x28. The payload of the
-message is encrypted with a symmetric key shared between the endpoint sending
-the message and the middlebox receiving it and contains a "partial secret" for
-each context to which the middlebox has access.  Once a middlebox receives and
-decrypts a MiddleboxKeyMaterial message from both the client and the server, it
-uses both secrets to generate the keys that will actually be used in the
-encryption of application data (see [Context Key
-Generation](#context-key-generation)).  The format of the message is as
+mcTLS introduces a new handshake message type for delivering context key
+material to middleboxes.  During the handshake, both the client and server will
+send a MiddleboxKeyMaterial message to each middlebox with tentative handshake
+message type 0x28. The payload of the message is encrypted with a symmetric key
+shared between the endpoint sending the message and the middlebox receiving it
+and contains a "partial secret" for each context to which the middlebox has
+access.  Once a middlebox receives and decrypts a MiddleboxKeyMaterial message
+from both the client and the server, it uses both secrets to generate the keys
+that will actually be used in the encryption of application data (see [Context
+Key Generation](#context-key-generation)).  The format of the message is as
 follows:
 
 	MiddleboxKeyMaterial {
         middlebox_id
         key_material {
             slice_id
-            read_material
-            write_material
+            read_secret
+            write_secret
         }[ ]
 	}
 
@@ -218,36 +238,34 @@ partitioned into `client_write_MAC_key` and `server_write_MAC_key`.
 
 ### Record Format
 
-TLS record format on the wire includes 1 byte for identifying the type of
-message, 2 bytes for the version of TLS in use, and 2 bytes for the message
-length. The header is followed by the encrypted payload including the message,
-MAC, and padding for block ciphers. We extend the header to include a 1 byte
-slice ID: 
+The TLS record format includes 1 byte for identifying the type of message, 2
+bytes for the version of TLS in use, and 2 bytes for the message length. The
+header is followed by the encrypted payload including the message, MAC, and
+padding for block ciphers. We extend the header to include a 1 byte context ID: 
 
 	0-------8---------------24--------------40------48----------------------------N
-	| TYPE  |    VERSION    |    LENGTH     | SLICE |      PROTECTED PAYLOAD      |
+	| TYPE  |    VERSION    |    LENGTH     | CTXT  |      PROTECTED PAYLOAD      |
 	-------------------------------------------------------------------------------
 
-mcTLS uses a new TLS version number so that middleboxes and servers may identify the
-new protocol from only decoding the first 3 bytes of the record. Tentatively,
-this version number is set to 6.102.
+mcTLS uses a new TLS version number so that middleboxes and servers can
+identify an mcTLS message by decoding only the first 3 bytes of the record.
+Tentatively, this version number is set to 6.102.
 
-The new wire format expands the functionality of TLS to facilitate the use of
-multiple encryption contexts in the encryption and decryption of the payloads.
-Upon receiving an mcTLS record from the wire, the mcTLS aware client, middlebox, or
-server must read the slice ID value from the header and apply the correct
-encryption context in the decryption operation. If a middlebox does not have an
-encryption context for a specified slice ID, the record should be forwarded
-unmodified to the next middlebox or endpoint. If a client or server does not have
-the encryption context for a specified slice ID, this should be treated as a
-protocol error.
+Upon receiving an mcTLS record from the wire, the mcTLS-aware client,
+middlebox, or server must read the context ID value from the header and apply
+the correct encryption context in the decryption operation. If a middlebox does
+not have keys for a particular context, it should forward the record unmodified
+to the next middlebox or endpoint. If a client or server does not have keys for
+the context, this should be treated as a protocol error.
 
-Similarly, when generating a record for transmission on the wire, the mcTLS aware
-application must specify which encryption context to be used in the encryption
-of the payload. The slice ID of the specified encryption context must be
-encoded in the record header.
+Similarly, when generating a record for transmission on the wire, the
+mcTLS-aware application must specify an encryption context. The record protocol
+uses the corresponding keys to encrypt and MAC-protect the payload and places
+the context ID in the record header.
 
 ### Message Authentication Code
+
+TODO: update
 
 TLS uses a keyed MAC to detect message tampering in the communication medium.
 If a middlebox performs a modification of the message, then validation of the
@@ -255,7 +273,7 @@ MAC at the recipient will fail as desired. However, the failure will be
 indistinguishable from an attack within the communication medium. Therefore,
 mcTLS introduces two additional MACs. The standard TLS MAC is generated using
 keyE2E while the two new MACs are generated using keyREAD and keyWRITE from the
-record slice. The keyE2E MAC insures that the ends of the mcTLS session can
+record context. The keyE2E MAC insures that the ends of the mcTLS session can
 detect the presence of modifications of the content by middleboxes. The keyREAD MAC
 is used by middleboxes to validate that the record has not been modified in the
 communication medium. The keyWRITE MAC is used to verify that modifications of
