@@ -3,7 +3,7 @@ layout: default
 title: mcTLS Specification
 ---
 
-# The multi-context TLS (mcTLS) Protocol
+# The Multi-Context TLS (mcTLS) Protocol
 {:.no_toc}
 
 The mcTLS protocol is designed to enable secure communication between a client, server,
@@ -57,16 +57,17 @@ access needed to do its jobs.
 
 ## Handshake Protocol
 
-The client generates a list of middleboxes to be used through a middlebox discovery
-mechanism outside the scope of this document. The client sends a TLS
-ClientHello message with the middlebox list included as a TLS extension. See MiddleboxListExtension 
-section for the format. The ClientHello must carry the mcTLS TLS
-version number. When the first middlebox sees the ClientHello, it forwards the
-message on until the message arrives at the server. Each middlebox examines the
-compression and cipher suites proposed by the client and eliminates those not
-supported by the middlebox. The server reads the middlebox list and may immediately
-terminate the connection if the middlebox list violates the application
-requirements.
+The client generates a list of middleboxes to be used through a middlebox
+discovery mechanism outside the scope of this document. The client sends a TLS
+ClientHello message with the middlebox list included as a TLS extension. See
+[Middlebox List Extension](#middlebox-list-extension) for the format. The
+ClientHello must carry the mcTLS TLS version number. When the first middlebox
+sees the ClientHello, it opens a TCP connection with the next middlebox and
+forwards the ClientHello. This continues until it reaches the server.
+Each middlebox examines the compression and cipher suites proposed
+by the client and eliminates those it does not support. The server
+reads the middlebox list and may immediately terminate the connection if the
+middlebox list violates the application requirements.
 
 The server sends a ServerHello message specifying the compression and cipher
 suites to be used (i.e., the ones it picked from those offered by the client).
@@ -77,36 +78,43 @@ being used, then Certificate messages must be followed with ServerKeyExchange
 messages. Once all Certificate and ServerKeyExchange messages are received, the
 client sends a TLS ClientKeyExchange message to the server. With the receipt of
 this message, the client and server possess a shared master secret. In TLS, the
-master secret is used to generate the session key, which is used for encryption
-and integrity; in mcTLS, the master secret is used to generate, which is used
-only for end-to-end integrity (see Message Authentication Code section). 
+master secret is used to generate the session key, which is used for encrypting
+and MAC-protecting application data.  In mcTLS, we refer to this "session key"
+as the `endpoint_encryption_key` and the `endpoint_MAC_key`. The
+`endpoint_encryption_key` is only used for transferring context key material
+between the client and the server and the `endpoint_MAC_key` is used for
+generating each record's endpoint MAC (see [Message Authentication
+Codes](#message-authentication-codes)).
 
-After distribution of the server and middlebox certificates, both the client and
-server generate two keys for each slice. The first key, keyREAD, is used to
-encrypt the slice and validate that the slice has not been modified on the
-communication medium. The second key, keyWRITE, is used to validate writes
-performed by middleboxes.
+After distribution of the server and middlebox certificates, both the client
+and server generate two secrets for each context: the
+`client_read_secret`/`client_write_secret` and
+`server_read_secret`/`server_write_secret`. These secrets are used by all
+parties (middleboxes and endpoints) to generate the *context keys* (see
+[Context Key Generation](#context-key-generation)) that will be used by the
+record protocol to encrypt and MAC-protect application data.
 
 The client and server will send MiddleboxKeyMaterial messages to each middlebox and the
-opposite endpoint to distribute key material. MiddleboxKeyMaterial is a new TLS
+opposite endpoint to distribute these secrets. MiddleboxKeyMaterial is a new TLS
 message type. See MiddleboxKeyMaterial Message section for format. The client and
-server should receive MiddleboxKeyMaterial messages containing keys for all slices
+server should send one another MiddleboxKeyMaterial messages containing secrets for all contexts
 in the middlebox_list extension. A violation must be treated as a protocol error.
-Proxies will receive key material for each slice for which they have read or
+Middleboxes will receive secrets for each context for which they have read or
 write access. Once a MiddleboxKeyMaterial message arrives at its intended middlebox
 recipient, it must be forwarded on to the opposite end of the handshake to
-insure that both the client and server observe the full sequence of handshake
+ensure that both the client and server observe the full sequence of handshake
 messages. The MiddleboxKeyMaterial message for the opposite end of the session must
 be sent last.
 
-Once all MiddleboxKeyMaterial messages have been received, client, server and
-middleboxes have the encryption contexts necessary to transmit application data.
-First, however, validation of a successful handshake must be performed. This is
-accomplished by the ChangeCipherSpec message to indicate the newly negotiated
-encryption contexts should now be used and the transmission of a Finished
-message using the negotiated keyE2E. If the client or server fail to validate
-the Finished message, then the client and server must not have observed the
-same sequence of handshake messages. This is a fatal error.
+Once all MiddleboxKeyMaterial messages have been received, the client, server,
+and middleboxes have the encryption contexts necessary to transmit application
+data.  First, however, validation of a successful handshake must be performed.
+This is accomplished by the ChangeCipherSpec message to indicate the newly
+negotiated encryption contexts should now be used and the transmission of a
+Finished message including a MAC of all handshake messages using
+`endpoint_MAC_key`. If the client or server fail to validate the Finished
+message, then the client and server must not have observed the same sequence of
+handshake messages. This is a fatal error.
 
 	         CLIENT               MIDDLEBOX 1         MIDDLEBOX 2               SERVER
 
@@ -223,11 +231,15 @@ There are six symmetric keys associated with each context:
 *	`client_write_MAC_key`: Compute writer MAC for data from client to server.
 *	`server_write_MAC_key`: Compute writer MAC for data from server to client.
 
+For simplicity, when referring to these keys elsewhere in this document, we do
+not distinguish between the client-to-server key and the server-to-client key
+(for example, we may simply refer to a context's `read_MAC_key`). 
+
 For each context, each party uses the partial secrets (one from the client and
 one from the server) to compute two blocks of key material:
 
-	read_key_block = PRF(client_reader_secret + server_reader_secret, "reader keys", client_random + server_random)
-	write_key_block = PRF(client_writer_secret + server_writer_secret, "writer keys", client_random + server_random)
+	read_key_block = PRF(client_read_secret + server_read_secret, "reader keys", client_random + server_random)
+	write_key_block = PRF(client_write_secret + server_write_secret, "writer keys", client_random + server_random)
 
 The `read_key_block` is partitioned into `client_read_key`, `server_read_key`,
 `client_read_MAC_key`, and `server_read_MAC_key`; the `write_key_block` is
@@ -263,22 +275,21 @@ mcTLS-aware application must specify an encryption context. The record protocol
 uses the corresponding keys to encrypt and MAC-protect the payload and places
 the context ID in the record header.
 
-### Message Authentication Code
+### Message Authentication Codes
 
-TODO: update
+TLS uses a keyed MAC to detect message tampering by parties. mcTLS uses three
+MACs for each record:
 
-TLS uses a keyed MAC to detect message tampering in the communication medium.
-If a middlebox performs a modification of the message, then validation of the
-MAC at the recipient will fail as desired. However, the failure will be
-indistinguishable from an attack within the communication medium. Therefore,
-mcTLS introduces two additional MACs. The standard TLS MAC is generated using
-keyE2E while the two new MACs are generated using keyREAD and keyWRITE from the
-record context. The keyE2E MAC insures that the ends of the mcTLS session can
-detect the presence of modifications of the content by middleboxes. The keyREAD MAC
-is used by middleboxes to validate that the record has not been modified in the
-communication medium. The keyWRITE MAC is used to verify that modifications of
-the record have exclusively been performed by middleboxes with write access. The
-MAC format has not changed and is described as follows:
+*	A *reader MAC*, generated with the context's `read_MAC_key`. This is used
+	to detect changes by third parties.
+
+*	A *writer MAC*, generated with the context's `write_MAC_key`. This is used
+	to detect (illegal) changes by middleboxes with read-only access.
+
+*	An *endpoint MAC*, generated with the `endpoint_MAC_key`. This is used to
+	detect (legal) changes by middleboxes with write access.
+
+The MAC format has not changed:
 
 	MAC_function(MAC_write_key, seq_num + record.type + record.version + record.length + record.content)
 
@@ -289,7 +300,7 @@ the full session, middleboxes must never modify the number or order of mcTLS rec
 on the communication medium.
 
 The order of the MACs after the record payload is not significant and chosen
-arbitrarily to be: payload, read MAC, write MAC, end-to-end integrity MAC.
+arbitrarily to be: payload, reader MAC, writer MAC, endpoint MAC.
 
 ## Application Programming Interface
 
