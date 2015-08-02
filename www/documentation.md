@@ -9,7 +9,7 @@ title: mcTLS Specification
 The mcTLS protocol is designed to enable secure communication between a client, server,
 and 1 or more middleboxes in series between the client and server. The protocol is built 
 as an extension to the TLSv1.2 protocol. This document extends and modifieds the TLSv1.2
-specification in RFC 5246 (https://tools.ietf.org/html/rfc5246). Where details are omitted 
+specification in [RFC 5246](https://tools.ietf.org/html/rfc5246). Where details are omitted 
 here, the reader should assume that no changes are made from the TLSv1.2 specification.
 
 #### Contents
@@ -157,14 +157,20 @@ server) messages.)
 
 ### Middlebox List Extension
 
-mcTLS defines a new TLS handshake extension middlebox_list with tentative type id
-0xff06. The extension contains a list of the middleboxes to be used in the
-communication as well as the number of encryption contexts, also known as
-slices, that need to be generated and which middleboxes should have access to which
-slices. Therefore, the client application must first derive the minimum number
-of slices required for the session from the requirements of all middleboxes to be
-used and feed the distribution among middleboxes as input to the mcTLS handshake
-operation. The format is as follows:
+mcTLS defines a new TLS handshake extension middlebox_list with tentative type ID
+0xff06. The extension contains:
+
+*	A list of context IDs and descriptions. A context description is a string
+	meaningful only to the application; mcTLS does not use it.
+
+*	A list of middleboxes. Each entry specifies the middlebox's address, a
+	unique ID, a list of the contexts for which the middlebox has read access, and
+	a list of the contexts for which the middlebox has write access.
+
+In order to make this list, the client application must know in advance how
+many contexts it will need, which middleboxes should be included, and what
+their permissions should be. How it knows these things is beyond the scope of
+this document.  The format is as follows:
 
 	middlebox_list {
 	    slice {
@@ -179,18 +185,19 @@ operation. The format is as follows:
 	    }[ ]
 	}
 
-The structure is described below. All elements of variable size are prepended
-with their length.  slice_id is a single byte unique identifier that will have
-a one-to-one correspondence with an encryption context used within the mcTLS
-session. A slice purpose is a byte array by which the application may specify
-the purpose of the slice. Each middlebox is identified by an address, which is a
-utf8 character array containing either the domain name or IP address of the
-middlebox, and a middlebox_id, which is a one byte unique identifier. Each middlebox is
-also assigned a set of 0 or more slices from the list slice_ids for which the
-middlebox has read access and a set of 0 or more slices for which the middlebox has
-write access. To have write access, a middlebox must also have read access. The
-middlebox_id values 0x00-0x02 are reserved, with 0x01 always identifying the client
-and 0x02 always identifying the server.
+All elements of variable size are prepended with their length.  slice_id is a
+single byte unique identifier that will uniquely identify an encryption context
+(each record will be tagged with a one of these IDs---see [Record
+Format](#record-format)).  A slice purpose is a byte array with which the
+application may specify the purpose of the slice. Each middlebox is identified
+by an address, which is a utf8 character array containing either the domain
+name or IP address of the middlebox, and a middlebox_id, which is a one byte
+unique identifier. Each middlebox is also assigned a set of 0 or more contexts
+from the list slice_ids for which the middlebox has read access and a set of 0
+or more slices for which the middlebox has write access. To have write access,
+a middlebox must also have read access.  The middlebox_id values 0x00-0x02 are
+reserved, with 0x01 always identifying the client and 0x02 always identifying
+the server.
 
 
 ### Middlebox Key Material Message
@@ -216,13 +223,11 @@ follows:
         }[ ]
 	}
 
-The format of the material varies depending upon the cipher suite agreed upon
-in the ServerHello message. 
-
 
 ### Context Key Generation
 
-There are six symmetric keys associated with each context:
+The keys used to encrypt/decrypt and MAC-protect application data are called
+*context keys*.  There are six symmetric keys associated with each context:
 
 *	`client_read_key`: Encrypt/decrypt data from client to server.
 *	`server_read_key`: Encrypt/decrypt data from server to client.
@@ -235,8 +240,10 @@ For simplicity, when referring to these keys elsewhere in this document, we do
 not distinguish between the client-to-server key and the server-to-client key
 (for example, we may simply refer to a context's `read_MAC_key`). 
 
-For each context, each party uses the partial secrets (one from the client and
-one from the server) to compute two blocks of key material:
+After receiving a MiddleboxKeyMaterial message from each endpoint, all parties
+compute the context keys for the contexts that they can access.  For each
+context, each party uses the partial secrets (one from the client and one from
+the server) to compute two blocks of key material:
 
 	read_key_block = PRF(client_read_secret + server_read_secret, "reader keys", client_random + server_random)
 	write_key_block = PRF(client_write_secret + server_write_secret, "writer keys", client_random + server_random)
