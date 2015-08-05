@@ -1,10 +1,8 @@
 ---
 layout: default
+header: The Multi-Context TLS (mcTLS) Protocol
 title: mcTLS Specification
 ---
-
-# The Multi-Context TLS (mcTLS) Protocol
-{:.no_toc}
 
 The mcTLS protocol is designed to enable secure communication between a client, server,
 and 1 or more middleboxes in series between the client and server. The protocol is built 

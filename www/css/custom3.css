@@ -1,0 +1,4 @@
+/* underline active navbar tab */
+li.active {
+  border-bottom: 1px solid #2C59DE !important;
+}
