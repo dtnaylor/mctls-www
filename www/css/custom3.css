@@ -2,3 +2,10 @@
 li.active {
   border-bottom: 1px solid #2C59DE !important;
 }
+
+/* set font to Open Sans */
+body {
+	font-family: "Open Sans","Helvetica Neue",Helvetica,Arial,sans-serif;
+	font-weight: 300;
+	font-size: 16px;
+}
