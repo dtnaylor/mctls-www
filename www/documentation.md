@@ -439,12 +439,12 @@ sufficient for the client to authenticate each middlebox and the server*; the
 middleboxes and the server do not need to authenticate anyone. For simplicity,
 in the rest of this document we assume that the client authenticates everyone.
 
-Since the client sends partial context keys to each party encrypted under a
+Since the client sends partial context secrets to each party encrypted under a
 symmetric key it shares with that party, *it is sufficient to show that each
 symmetric key the client establishes is really shared by the correct entity
-(see below).* (Even if the server does not authenticate anyone and sends partial
-context keys to an adversary, the server’s partial keys are useless without
-partial keys from the client as well.)
+(see below).* (Even if the server does not authenticate anyone and sends
+partial context secrets to an adversary, the server’s partial secrets are
+useless without secrets from the client as well.)
 
 #### Session Configuration
 
