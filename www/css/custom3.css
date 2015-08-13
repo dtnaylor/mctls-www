@@ -3,6 +3,21 @@ li.active {
   border-bottom: 1px solid #2C59DE !important;
 }
 
+/* outline menu toggle button in mobile view */
+.navbar-toggle {
+	border-color: #ddd;
+}
+
+.navbar-toggle:hover,
+.navbar-toggle:focus {
+	background-color: #ddd;
+}
+
+/* show horizontal bars in menu toggle button in mobile view */
+.navbar-toggle .icon-bar {
+	background-color: #aaa;
+}
+
 /* set font to Open Sans */
 body {
 	font-family: "Open Sans","Helvetica Neue",Helvetica,Arial,sans-serif;
