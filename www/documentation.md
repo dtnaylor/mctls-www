@@ -427,7 +427,7 @@ middleboxes—can force the session to use a weak encryption cipher or give
 middleboxes higher permissions than the application intended.)
 
 
-#### Distributing Context Keys
+#### 1. Distributing Context Keys
 
 Like TLS, mcTLS can operate in multiple
 authentication modes. Any party may optionally authenticate any other party,
@@ -446,7 +446,7 @@ symmetric key the client establishes is really shared by the correct entity
 partial context secrets to an adversary, the server’s partial secrets are
 useless without secrets from the client as well.)
 
-#### Session Configuration
+#### 2. Session Configuration
 
 Many configuration parameters are exchanged before any parties have established
 shared keys, so they are sent in the clear. These values’ being visible is not
@@ -456,11 +456,11 @@ weaker encryption algorithm than they ordinarily would).
 
 **Endpoints:** If handshake messages are modified, the client and server will
 compute different handshake transcript hashes and will abort the session when
-they notice the discrepancy. Since these hashes are protected by K_endpoints,
-an adversary cannot update them to reflect any changes it made to earlier
-handshake messages. Therefore, to show that configuration parameters are safe,
-*it is sufficient to show that the client establishes a shared key with the
-correct server (see below).*
+they notice the discrepancy. Since these hashes are protected by
+``endpoint_MAC_key``, an adversary cannot update them to reflect any changes it
+made to earlier handshake messages. Therefore, to show that configuration
+parameters are safe, *it is sufficient to show that the client establishes a
+shared key with the correct server (see below).*
 
 **Middleboxes:** mcTLS does not give middleboxes a way to verify the handshake
 transcript. This means an adversary could arbitrarily alter any handshake
